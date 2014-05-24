@@ -8,10 +8,10 @@
  */
 
 
+import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
 import java.io.*;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -19,12 +19,18 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
+import static java.util.Map.Entry;
+
+
+
+
 
 class NoiseAction extends AbstractAction {
         TaggerGUI frame;
         public NoiseAction(TaggerGUI frame)
         {
             this.frame = frame;
+
 
         }
         @Override
@@ -35,7 +41,7 @@ class NoiseAction extends AbstractAction {
             DefaultListModel lm = (DefaultListModel)frame.getJList().getModel();
             String line = (String)frame.getJList().getSelectedValue();
             int[] indices = frame.getJList().getSelectedIndices();
-            for(int i=0; i<indices.length; i++) {
+      /*      for(int i=0; i<indices.length; i++) {
                 line = (String)lm.getElementAt(indices[i]);
                 if(line.contains("<RELEVANT>")) {
                     line = line.replace("<RELEVANT>", "<NOISE-A>");
@@ -50,6 +56,7 @@ class NoiseAction extends AbstractAction {
             }
 
             System.out.println("<NOISE-A>" + line + "</NOISE-A>");
+         */
             frame.getJList().setSelectedIndex(indices[indices.length-1]+1);
             frame.getJScrollPane().revalidate();
             frame.getJScrollPane().repaint();
@@ -62,6 +69,7 @@ class NoiseAction extends AbstractAction {
 
 class MyListModel extends DefaultListModel {
     int lastTaggedLine = 0;
+
     public MyListModel(String[] data) {
         strings = data;
     }
@@ -72,7 +80,8 @@ class MyListModel extends DefaultListModel {
     public int getSize() { return strings.length; }
     public Object getElementAt(int i) { return strings[i]; }
     public void setElementAt(Object obj, int i) {
-        strings[i] = (String)obj; fireContentsChanged(this, i, i);
+        strings[i] = (String)obj;
+        fireContentsChanged(this, i, i);
         if(i>lastTaggedLine) lastTaggedLine = i;
     }
     public void setData(String[] data) {
@@ -93,20 +102,227 @@ public class TaggerGUI extends javax.swing.JFrame {
     BufferedWriter bw; // output file writer
     int currentLine;
     String filenameSaved;
-    static String noiseATag = "<NOISE-A>";
-    static String noiseBTag = "<NOISE-B>";
-    static String relevantTag = "<RELEVANT>";
-    static String noiseATagClose = "</NOISE-A>";
-    static String noiseBTagClose = "</NOISE-B>";
-    static String relevantTagClose = "</RELEVANT>";
+    static String equationTag = "<EQUATION>";
+    static String tableTag = "<TABLE>";
+    static String codeTag = "<CODE>";
+    static String miscTag = "<MISCELLANEOUS>";
+    static String equationTagClose = "</EQUATION>";
+    static String tableTagClose = "</TABLE>";
+    static String codeTagClose = "</CODE>";
+    static String miscTagClose = "</MISCELLANEOUS>";
+    static String[] tags = {equationTag, tableTag, codeTag, miscTag};
+    static String[] closeTags = {equationTagClose, tableTagClose, codeTagClose, miscTagClose};
+    static HashMap<Integer, Integer> taggedZones = new HashMap<Integer, Integer>();
+    WhiteYellowCellRenderer myCellRenderer = new WhiteYellowCellRenderer();
+    int initiatedTag = -1;
+    static int tableTagIdx = 1;
+    static int equTagIdx = 2;
+    static int codeTagIdx = 3;
+    static int miscTagIdx = 4;
+
+    int lastTaggedLineIdx = -1;
+    int lastTaggedTokenIdx = -1;
+
+    // line number of the most recent tag, so that the end tag can't be above it
+    static int initiatedLineNum = 0;
+
     /**
      * Creates new form NewJFrame
      */
     public TaggerGUI() {
         initComponents();
-        jList1.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
+        mainList.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
 
         //      jButton1.addActionListener(na);
+    }
+
+
+    private static class WhiteYellowCellRenderer extends DefaultListCellRenderer {
+        static boolean isTableInitiated = false;
+        static boolean isEquationInitiated = false;
+        static boolean isCodeInitiated = false;
+        static boolean isMiscInitiated = false;
+
+        static int initiatedIdx = 0;
+        HashSet<Map.Entry<Integer, Integer>> tableCoverage = new HashSet<Entry<Integer, Integer>>();
+        HashSet<Map.Entry<Integer, Integer>> equCoverage = new HashSet<Entry<Integer, Integer>>();
+        HashSet<Map.Entry<Integer, Integer>> codeCoverage = new HashSet<Entry<Integer, Integer>>();
+        HashSet<Entry<Integer, Integer>> miscCoverage = new HashSet<Entry<Integer, Integer>>();
+
+
+        static int endIdx = 0;
+
+        public void closeUndo(String closeTag, int index) {
+            Entry<Integer, Integer> deleteObject = null;
+            if(closeTag == equationTagClose) {
+                for(Entry<Integer, Integer> e : equCoverage) {
+                    if(index == e.getValue()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                equCoverage.remove(deleteObject);
+
+            }
+            else if(closeTag == tableTagClose) {
+                for(Entry<Integer, Integer> e : tableCoverage) {
+                    if(index == e.getValue()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                tableCoverage.remove(deleteObject);
+
+            }
+            else if(closeTag == codeTagClose) {
+                for(Entry<Integer, Integer> e : codeCoverage) {
+                    if(index == e.getValue()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                codeCoverage.remove(deleteObject);
+            }
+            else if(closeTag == miscTagClose) {
+                for(Entry<Integer, Integer> e : miscCoverage) {
+                    if(index == e.getValue()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+
+                miscCoverage.remove(deleteObject);
+            }
+
+        }
+
+        public void beginUndo(String tag, int index) {
+            Entry<Integer, Integer> deleteObject = null;
+            if(tag == equationTag) {
+                for(Entry<Integer, Integer> e : equCoverage) {
+                    if(index == e.getKey()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                equCoverage.remove(deleteObject);
+
+            }
+            else if(tag == tableTag) {
+                for(Entry<Integer, Integer> e : tableCoverage) {
+                    if(index == e.getKey()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                tableCoverage.remove(deleteObject);
+
+            }
+            else if(tag == codeTag) {
+                for(Entry<Integer, Integer> e : codeCoverage) {
+                    if(index == e.getKey()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+                codeCoverage.remove(deleteObject);
+            }
+            else if(tag == miscTag) {
+                for(Entry<Integer, Integer> e : miscCoverage) {
+                    if(index == e.getKey()) {
+                        deleteObject = e;
+                        break;
+                    }
+                }
+
+                miscCoverage.remove(deleteObject);
+            }
+
+        }
+        public Component getListCellRendererComponent( JList list, Object value, int index, boolean isSelected, boolean cellHasFocus ) {
+            Component c = super.getListCellRendererComponent( list, value, index, isSelected, cellHasFocus );
+            ListModel lm = list.getModel();
+            String line = (String)lm.getElementAt(index);
+                if(line.contains(tableTag)) {
+                    isTableInitiated = true;
+                    initiatedIdx = index;
+                    c.setBackground(Color.blue);
+
+                }
+                else if(line.contains(equationTag)) {
+                    isEquationInitiated = true;
+                    initiatedIdx = index;
+                    c.setBackground(Color.pink);
+
+                }
+                else if(line.contains(codeTag)) {
+                    isCodeInitiated = true;
+                    c.setBackground(Color.orange);
+
+                    initiatedIdx = index;
+                }
+                else if(line.contains(miscTag)) {
+                    isMiscInitiated = true;
+                    initiatedIdx = index;
+                    c.setBackground(Color.yellow);
+
+                }
+
+                if(line.contains(tableTagClose)) {
+                    endIdx = index;
+                    isTableInitiated = false;
+                    tableCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+                }
+                else if(line.contains(equationTagClose)) {
+                    endIdx = index;
+                    isEquationInitiated = false;
+                    equCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+
+                }
+                else if(line.contains(codeTagClose)) {
+                    endIdx = index;
+                    isCodeInitiated = false;
+                    codeCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+
+                }
+                else if(line.contains(miscTagClose)) {
+                    endIdx = index;
+                    isMiscInitiated = false;
+
+                    miscCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+
+                }
+
+
+                for(Entry<Integer, Integer> e: tableCoverage) {
+                    if(index >= e.getKey() && index<=e.getValue()) {
+                        c.setBackground(Color.blue);
+                        System.out.println(e.getKey() + ": " + e.getValue());
+                  //      break;
+                    }
+                //    if(index >= e.getValue()) break;
+                }
+
+                for(Entry<Integer, Integer> e: codeCoverage) {
+                    if(index >= e.getKey() && index<=e.getValue()) {
+                        c.setBackground(Color.orange);
+                    }
+                }
+
+                for(Entry<Integer, Integer> e: equCoverage) {
+                    if(index >= e.getKey() && index<=e.getValue()) {
+                        c.setBackground(Color.pink);
+                    }
+                }
+
+                for(Entry<Integer, Integer> e: miscCoverage) {
+                    if (index >= e.getKey() && index <= e.getValue()) {
+                        c.setBackground(Color.yellow);
+                    }
+                }
+
+            return c;
+        }
     }
 
     /**
@@ -118,63 +334,149 @@ public class TaggerGUI extends javax.swing.JFrame {
     // <editor-fold defaultstate="collapsed" desc="Generated Code">
     private void initComponents() {
 
-        noiseButton = new javax.swing.JButton();
-        relevantButton = new javax.swing.JButton();
-        semanticNoiseButton = new javax.swing.JButton();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        jList1 = new javax.swing.JList();
-        saveButton = new javax.swing.JButton();
-        jMenuBar1 = new javax.swing.JMenuBar();
-        jMenu1 = new javax.swing.JMenu();
-        jMenuItem1 = new javax.swing.JMenuItem();
-        jMenu2 = new javax.swing.JMenu();
-        jScrollPane3 =  new javax.swing.JScrollPane();
-        sentenceList = new javax.swing.JList();
-        revertButton = new javax.swing.JButton();
-
+        equButton = new JButton();
+        codeButton = new JButton();
+        tableButton = new JButton();
+        miscButton = new JButton();
+        equButton2 = new JButton();
+        codeButton2 = new JButton();
+        tableButton2 = new JButton();
+        miscButton2 = new JButton();
+        jScrollPane1 = new JScrollPane();
+        mainList = new JList();
+        saveButton = new JButton();
+        menuBar = new JMenuBar();
+        jMenu1File = new JMenu();
+        jMenu1ItemOpen = new JMenuItem();
+        jMenu2Edit = new JMenu();
+        jScrollPane3 =  new JScrollPane();
+        sentenceList = new JList();
+        revertButton = new JButton();
+        jMenu3Tags = new JMenu();
+        addTagMenuItem = new JMenuItem();
+        jMenu1ItemSave = new JMenuItem();
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        noiseButton.setText("Syntatic Noise (CTRL+Q)");
-        noiseButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control Q"), "NOISE_ACTION_A");
-        noiseButton.getActionMap().put("NOISE_ACTION_A", new AbstractAction() {
+
+        tableButton2.setEnabled(false);
+        codeButton2.setEnabled(false);
+        miscButton2.setEnabled(false);
+        equButton2.setEnabled(false);
+
+        equButton.setText("Equation <--(CTR+W)");
+        equButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control W"), "NOISE_ACTION_A");
+        equButton.getActionMap().put("NOISE_ACTION_A", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                noiseButton.doClick();
+                equButton.doClick();
             }
         });
-        noiseButton.addActionListener(new java.awt.event.ActionListener() {
+        equButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 noiseButtonActionPerformed(evt);
             }
         });
 
-
-        relevantButton.setText("Relevant (CTRL+E)");
-        relevantButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control E"), "RELEVANT_ACTION");
-        relevantButton.getActionMap().put("RELEVANT_ACTION", new AbstractAction() {
+        equButton2.setText("Equation -->(CTR+S)");
+        equButton2.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control S"), "NOISE_ACTION_A");
+        equButton2.getActionMap().put("NOISE_ACTION_A", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                relevantButton.doClick();
+                equButton2.doClick();
             }
         });
-        relevantButton.addActionListener(new java.awt.event.ActionListener() {
+        equButton2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                relevantButtonActionPerformed(evt);
+                noiseCloseButtonActionPerformed(evt);
             }
         });
 
-        semanticNoiseButton.setText("Semantic Noise (CTRL+W)");
-        semanticNoiseButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control W"), "NOISE_ACTION_B");
-        semanticNoiseButton.getActionMap().put("NOISE_ACTION_B", new AbstractAction() {
+        codeButton.setText("Code <--(CTR+E)");
+        codeButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control E"), "NOISE_ACTION_B");
+        codeButton.getActionMap().put("NOISE_ACTION_B", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                semanticNoiseButton.doClick();
+                codeButton.doClick();
             }
         });
-        semanticNoiseButton.addActionListener(new java.awt.event.ActionListener() {
+
+        codeButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                noiseButtonActionPerformed(evt);
+            }
+        });
+        codeButton2.setText("Code -->(CTR+D)");
+        codeButton2.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control D"), "NOISE_ACTION_B");
+        codeButton2.getActionMap().put("NOISE_ACTION_B", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                codeButton2.doClick();
+            }
+        });
+
+        codeButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                noiseCloseButtonActionPerformed(evt);
+            }
+        });
+
+        tableButton.setText("Table <--(CTR+R)");
+        tableButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control R"), "NOISE_ACTION_C");
+        tableButton.getActionMap().put("NOISE_ACTION_C", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                tableButton.doClick();
+            }
+        });
+        tableButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 //         semanticNoiseButtonActionPerformed(evt);
                 noiseButtonActionPerformed(evt);
+            }
+        });
+
+        tableButton2.setText("Table -->(CTR+F)");
+        tableButton2.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control F"), "NOISE_ACTION_C");
+        tableButton2.getActionMap().put("NOISE_ACTION_C", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                tableButton2.doClick();
+            }
+        });
+        tableButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                //         semanticNoiseButtonActionPerformed(evt);
+                noiseCloseButtonActionPerformed(evt);
+            }
+        });
+
+        miscButton.setText("MISCELLANEOUS <--(CTR+T)");
+        miscButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control T"), "NOISE_ACTION_D");
+        miscButton.getActionMap().put("NOISE_ACTION_D", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                miscButton.doClick();
+            }
+        });
+        miscButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                //         semanticNoiseButtonActionPerformed(evt);
+                noiseButtonActionPerformed(evt);
+            }
+        });
+
+        miscButton2.setText("MISCELLANEOUS -->(CTR+G)");
+        miscButton2.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control G"), "NOISE_ACTION_D");
+        miscButton2.getActionMap().put("NOISE_ACTION_D", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                miscButton2.doClick();
+            }
+        });
+        miscButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                //         semanticNoiseButtonActionPerformed(evt);
+                noiseCloseButtonActionPerformed(evt);
             }
         });
 
@@ -187,34 +489,43 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         jScrollPane3.setViewportView(sentenceList);
 
-        jList1.setModel(new MyListModel());
+        mainList.setModel(new MyListModel());
+        mainList.setCellRenderer( myCellRenderer );
+
         sentenceList.setModel(new MyListModel());
 
-        jScrollPane1.setViewportView(jList1);
+        jScrollPane1.setViewportView(mainList);
 
-        saveButton.setText("Save");
+    /*    saveButton.setText("Save");
         saveButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 saveActionPerformed(evt);
             }
         });
+    */
 
 
+        jMenu1File.setText("File");
 
-        jMenu1.setText("File");
-
-        jMenuItem1.setText("Open");
-        jMenuItem1.addActionListener(new java.awt.event.ActionListener() {
+        jMenu1ItemOpen.setText("Open");
+        jMenu1ItemOpen.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jMenuItem1ActionPerformed(evt);
+                fileOpenMenuClicked(evt);
             }
         });
 
-        jList1.addListSelectionListener(new ListSelectionListener() {
+        jMenu1ItemSave.setText("Save");
+        jMenu1ItemSave.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                saveActionPerformed(evt);
+            }
+        });
+
+        mainList.addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) throws NullPointerException {
-                if (!jList1.isSelectionEmpty()) {
-                    String line = (String) jList1.getSelectedValue();
+                if (!mainList.isSelectionEmpty()) {
+                    String line = (String) mainList.getSelectedValue();
                     String[] tokens;
                     if (line.contains(" "))
                         tokens = line.split(" ");
@@ -225,8 +536,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                     jScrollPane3.repaint();
                     sentenceList.repaint();
 
-                }
-                else{
+                } else {
                     String[] tokens = new String[]{""};
 
                     sentenceList.setModel(new MyListModel(tokens));
@@ -238,14 +548,23 @@ public class TaggerGUI extends javax.swing.JFrame {
         });
 
 
-        jMenu1.add(jMenuItem1);
+        jMenu1File.add(jMenu1ItemOpen);
+        menuBar.add(jMenu1File);
+        jMenu2Edit.setText("Edit");
+        menuBar.add(jMenu2Edit);
 
-        jMenuBar1.add(jMenu1);
+        jMenu3Tags.setText("Tags");
+        addTagMenuItem.setText("Add Tags");
+        jMenu3Tags.add(addTagMenuItem);
+        menuBar.add(jMenu3Tags);
+        setJMenuBar(menuBar);
 
-        jMenu2.setText("Edit");
-        jMenuBar1.add(jMenu2);
 
-        setJMenuBar(jMenuBar1);
+        addTagMenuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                tagMenuClickedAction(evt);
+            }
+        });
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -253,16 +572,30 @@ public class TaggerGUI extends javax.swing.JFrame {
                 layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                         .addGroup(layout.createSequentialGroup()
                                 .addContainerGap()
-                                .addComponent(noiseButton)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(relevantButton)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(semanticNoiseButton)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(revertButton)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(saveButton)
-                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                                .addGroup(layout.createParallelGroup()
+                                        .addGroup(layout.createSequentialGroup()
+                                                .addComponent(equButton)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(codeButton)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(tableButton)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(miscButton)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(revertButton)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                        //           .addComponent(saveButton)
+                                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                                        .addGroup(layout.createSequentialGroup()
+                                                .addComponent(equButton2)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(codeButton2)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(tableButton2)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addComponent(miscButton2)
+                                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
                         .addGroup(layout.createSequentialGroup()
                                 .addComponent(jScrollPane1, GroupLayout.DEFAULT_SIZE, 314, javax.swing.GroupLayout.DEFAULT_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -276,81 +609,28 @@ public class TaggerGUI extends javax.swing.JFrame {
                                         .addComponent(jScrollPane3, GroupLayout.PREFERRED_SIZE, 212, GroupLayout.PREFERRED_SIZE))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                        .addComponent(noiseButton)
-                                        .addComponent(relevantButton)
-                                        .addComponent(semanticNoiseButton)
-                                        .addComponent(revertButton)
-                                        .addComponent(saveButton))
-
-                                .addGap(22, 22, 22))
+                                        .addComponent(equButton)
+                                        .addComponent(codeButton)
+                                        .addComponent(tableButton)
+                                        .addComponent(miscButton)
+                                        .addComponent(revertButton))
+                                        //            .addComponent(saveButton))
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                        .addComponent(equButton2)
+                                        .addComponent(codeButton2)
+                                        .addComponent(tableButton2)
+                                        .addComponent(miscButton2)
+                                        .addGap(22, 22, 22)))
         );
 
         pack();
     }// </editor-fold>
 
-    private void noiseButtonActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
-        String beginTag, closeTag;
-        if(evt.getSource() == noiseButton) {
-            beginTag = noiseATag;
-            closeTag = noiseATagClose;
-        }
-        else {
-            beginTag = noiseBTag;
-            closeTag = noiseBTagClose;
-        }
 
-        saveButton.setEnabled(true);
-
-        JList activeObject;
-        boolean sentenceListActivated = false;
-        if(sentenceList.isSelectionEmpty())
-            activeObject = jList1;
-        else {
-            activeObject = sentenceList;
-            sentenceListActivated = true;
-        }
-        MyListModel lm = (MyListModel)activeObject.getModel();
-        String line = (String)activeObject.getSelectedValue();
-        int[] indices = activeObject.getSelectedIndices();
-        String originalLine;
-        for(int i=0; i<indices.length; i++) {
-            line = (String)lm.getElementAt(indices[i]);
-            originalLine = line;
-            if(line.contains(relevantTag)) {
-                line = line.replace(relevantTag, beginTag);
-                line = line.replace(relevantTagClose, closeTag);
-            }
-            else if(!line.contains(beginTag)) {
-                line = beginTag + line + closeTag;
-            }
-            lm.setElementAt(line, indices[i]);
-            System.out.println(indices[i]);
-            if(sentenceListActivated) {
-                int indexInTokenizedList = indices[i];
-                String jlistLine = (String)jList1.getSelectedValue();
-                int tokenIdx = findIndexOfNthToken(jlistLine, indices[i]);
-                jlistLine = jlistLine.substring(0, tokenIdx) + jlistLine.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
-                jlistLine = jlistLine.replace(noiseATagClose + " " + noiseATag, " ");
-                jlistLine = jlistLine.replace(noiseBTagClose + " " + noiseBTag, " ");
-
-
-                MyListModel jlistModel = (MyListModel)jList1.getModel();
-                System.out.println(jlistLine);
-                jlistModel.setElementAt(jlistLine, jList1.getSelectedIndex());
-            }
-
-        }
-
-
-
-    //    System.out.println("<NOISE-A>" + line + "</NOISE-A>");
-        activeObject.setSelectedIndex(indices[indices.length-1]+1);
-        jScrollPane1.revalidate();
-        jScrollPane1.repaint();
-
+    private void tagMenuClickedAction(ActionEvent evt) {
+        new AddTagFrame().setVisible(true);
     }
-
 
     private int findIndexOfNthToken(String line, int tokenIdx) {
         String[] tokens = line.split(" ");
@@ -359,79 +639,207 @@ public class TaggerGUI extends javax.swing.JFrame {
             curIdx += tokens[i].length();
             curIdx++; // for a blank space
         }
-        System.out.println(tokens[tokenIdx]+"vs " + line.substring(curIdx, curIdx + tokens[tokenIdx].length()));
         return curIdx;
 
     }
-    private void relevantButtonActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
-        saveButton.setEnabled(true);
 
-        DefaultListModel lm = (DefaultListModel)jList1.getModel();
-        String line = (String)jList1.getSelectedValue();
-        int[] indices = jList1.getSelectedIndices();
-        for(int i=0; i<indices.length; i++) {
-            line = (String)lm.getElementAt(indices[i]);
-            if(line.contains("<NOISE-A>")) {
-                line = line.replace("<NOISE-A>", "<RELEVANT>");
-                line = line.replace("</NOISE-A>", "</RELEVANT>");
+    private void noiseButtonActionPerformed(ActionEvent evt) {
+
+        String beginTag = null, closeTag = null;
+        int index = mainList.getSelectedIndex();
+
+        for(Integer startIdx : taggedZones.keySet()) {
+            if(index >= startIdx && index <= taggedZones.get(startIdx)) {
+                JOptionPane.showMessageDialog(this, "This area is already tagged!");
+                return;
             }
-            else if(line.contains("<NOISE-B>")) {
-                line = line.replace("<NOISE-B>", "<RELEVANT>");
-                line = line.replace("</NOISE-B>", "</RELEVANT>");
-            }
-            else if(!line.contains("<RELEVANT>")) {
-                line = "<RELEVANT>" + line + "<RELEVANT>";
-            }
-            lm.setElementAt(line, indices[i]);
-            System.out.println(indices[i]);
+        }
+
+        tableButton.setEnabled(false);
+        codeButton.setEnabled(false);
+        miscButton.setEnabled(false);
+        equButton.setEnabled(false);
+
+        tableButton2.setEnabled(false);
+        codeButton2.setEnabled(false);
+        miscButton2.setEnabled(false);
+        equButton2.setEnabled(false);
+        initiatedLineNum = mainList.getSelectedIndex();
+
+
+
+
+        if(evt.getSource() == equButton) {
+            beginTag = equationTag;
+            closeTag = equationTagClose;
+            initiatedTag = equTagIdx;
+            equButton2.setEnabled(true);
 
         }
-//        jList1.setModel(lm);
-        System.out.println("<RELEVANT>" + line + "</RELEVANT>");
-        jList1.setSelectedIndex(jList1.getSelectedIndex()+1);
+        else if(evt.getSource() == tableButton) {
+            beginTag = tableTag;
+            closeTag = tableTagClose;
+            initiatedTag = tableTagIdx;
+            tableButton2.setEnabled(true);
+
+
+        }
+        else if(evt.getSource() == codeButton) {
+            beginTag = codeTag;
+            closeTag = codeTagClose;
+            initiatedTag = codeTagIdx;
+            codeButton2.setEnabled(true);
+        }
+        else if(evt.getSource() == miscButton) {
+            beginTag = miscTag;
+            closeTag = miscTagClose;
+                initiatedTag = miscTagIdx;
+
+            miscButton2.setEnabled(true);
+
+        }
+   //     saveButton.setEnabled(true);
+        /**
+         * Is token-based annotation list activated?
+         */
+        JList activeObject;
+        boolean sentenceListActivated = false;
+        if(sentenceList.isSelectionEmpty())
+            activeObject = mainList;
+        else {
+            activeObject = sentenceList;
+            sentenceListActivated = true;
+        }
+        MyListModel lm = (MyListModel)activeObject.getModel();
+        String line = (String)activeObject.getSelectedValue();
+
+        int[] indices = activeObject.getSelectedIndices();
+        String originalLine;
+
+        for(int i=0; i<indices.length; i++) {
+            line = (String)lm.getElementAt(indices[i]);
+            originalLine = line;
+            line = replaceTagIfExists(line, beginTag, closeTag);
+            line = beginTag + line;
+            lm.setElementAt(line, indices[i]);
+            lastTaggedLineIdx = indices[i];
+            // merge consecutive tags
+            if(sentenceListActivated) {
+                String fullSentence = (String) mainList.getSelectedValue();
+                int tokenIdx = findIndexOfNthToken(fullSentence, indices[i]);
+                lastTaggedTokenIdx = tokenIdx;
+                fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
+                MyListModel jlistModel = (MyListModel) mainList.getModel();
+                jlistModel.setElementAt(fullSentence, mainList.getSelectedIndex());
+            }
+
+        }
+     //    System.out.println("<NOISE-A>" + line + "</NOISE-A>");
+        activeObject.setSelectedIndex(indices[indices.length-1]+1);
         jScrollPane1.revalidate();
         jScrollPane1.repaint();
 
+
     }
 
-    private void semanticNoiseButtonActionPerformed(java.awt.event.ActionEvent evt) {
-        saveButton.setEnabled(true);
 
-        DefaultListModel lm = (DefaultListModel)jList1.getModel();
-        String line = (String)jList1.getSelectedValue();
-        int[] indices = jList1.getSelectedIndices();
-        for(int i=0; i<indices.length; i++) {
-            line = (String)lm.getElementAt(indices[i]);
-            if(line.contains("<NOISE-A>")) {
-                line = line.replace("<NOISE-A>", "<NOISE-B>");
-                line = line.replace("</NOISE-A>", "</NOISE-B>");
-            }
-            else if(line.contains("<RELEVANT>")) {
-                line = line.replace("<RELEVANT>", "<NOISE-B>");
-                line = line.replace("</RELEVANT>", "</NOISE-B>");
-            }
-            else if(!line.contains("<NOISE-B>")) {
-                line = "<NOISE-B>" + line + "</NOISE-B>";
-            }
-            lm.setElementAt(line, indices[i]);
-            System.out.println(indices[i]);
 
+    private void noiseCloseButtonActionPerformed(ActionEvent evt) {
+        // find out which button was clicked
+        int mainIndex = mainList.getSelectedIndex();
+        if(mainIndex < lastTaggedLineIdx) {
+            JOptionPane.showMessageDialog(this, "An end tag should be located after the begin tag");
+            return;
         }
 
-//        System.out.println("<NOISE-A>" + line + "</NOISE-A>");
-        jList1.setSelectedIndex(indices[indices.length-1]+1);
-        jScrollPane1.revalidate();
-        jScrollPane1.repaint();
+        for(Integer startIdx : taggedZones.keySet()) {
+            if(mainIndex >= startIdx && mainIndex <= taggedZones.get(startIdx)) {
+                JOptionPane.showMessageDialog(this, "This area is already tagged!");
+                return;
+            }
+        }
+
+        int endIdx = mainList.getSelectedIndex();
+        tableButton.setEnabled(true);
+        codeButton.setEnabled(true);
+        miscButton.setEnabled(true);
+        equButton.setEnabled(true);
+
+        tableButton2.setEnabled(false);
+        codeButton2.setEnabled(false);
+        miscButton2.setEnabled(false);
+        equButton2.setEnabled(false);
+
+        String beginTag = null, closeTag = null;
+
+        if(evt.getSource() == equButton2) {
+            beginTag = equationTag;
+            closeTag = equationTagClose;
+        }
+        else if(evt.getSource() == tableButton2) {
+            beginTag = tableTag;
+            closeTag = tableTagClose;
+        }
+        else if(evt.getSource() == codeButton2) {
+            beginTag = codeTag;
+            closeTag = codeTagClose;
+
+        }
+        else if(evt.getSource() == miscButton2) {
+            beginTag = miscTag;
+            closeTag = miscTagClose;
+        }
+        if(initiatedTag == -1)
+            JOptionPane.showMessageDialog(this, "Can't end a tag that was not initiated");
+        else {
+            /**
+             * Is token-based annotation list activated?
+             */
+            JList activeObject;
+            boolean sentenceListActivated = false;
+            if(sentenceList.isSelectionEmpty())
+                activeObject = mainList;
+            else {
+                activeObject = sentenceList;
+                sentenceListActivated = true;
+            }
+
+            MyListModel lm = (MyListModel)activeObject.getModel();
+            String line = (String)activeObject.getSelectedValue();
+            int index = activeObject.getSelectedIndex();
+            String originalLine = (String)lm.getElementAt(index);
+
+            line = replaceTagIfExists(line, beginTag, closeTag);
+            line =  line + closeTag;
+            lm.setElementAt(line, index);
+            initiatedTag = -1;
+
+            if(sentenceListActivated) {
+                String fullSentence = (String) mainList.getSelectedValue();
+                int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                lastTaggedTokenIdx = tokenIdx;
+                fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
+                MyListModel jlistModel = (MyListModel) mainList.getModel();
+                jlistModel.setElementAt(fullSentence, mainList.getSelectedIndex());
+            }
+
+
+        }
+        taggedZones.put(initiatedLineNum, endIdx);
+
+        // trace back to the most recent opening tag
+        //; if not matched alert
+        // if matched, close it
+
     }
 
-    private void jMenuItem1ActionPerformed(java.awt.event.ActionEvent evt) {
+    private void fileOpenMenuClicked(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
         saveButton.setEnabled(true);
 
         final JFileChooser fc = new JFileChooser();
 
-        fc.setCurrentDirectory(new File("/Users/mhjang/Documents/teaching_documents/extracted/"));
+        fc.setCurrentDirectory(new File("./"));
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = fc.getSelectedFile();
@@ -442,17 +850,16 @@ public class TaggerGUI extends javax.swing.JFrame {
                 ArrayList<String> data = new ArrayList<String>();
                 while((line = br.readLine())!= null) {
                     if(!line.isEmpty())
-                        data.add(line = line.replace(relevantTag, "").replace(relevantTagClose, ""));
+                        data.add(line);
                 }
                 String[] dataAsString = new String[data.size()];
                 data.toArray(dataAsString);
                 MyListModel lm = new MyListModel(dataAsString);
-                jList1.setModel(lm);
-                //    lm.setData(dataAsString);
+                mainList.setModel(lm);
                 jScrollPane1.revalidate();
                 jScrollPane1.repaint();
-                jList1.revalidate();
-                jList1.repaint();
+                mainList.revalidate();
+                mainList.repaint();
                 filenameSaved = file.getName();
 
             } catch (Exception ex) {
@@ -462,21 +869,23 @@ public class TaggerGUI extends javax.swing.JFrame {
         }
     }
 
-    private void noiseButtonKeyPressed(java.awt.event.KeyEvent evt) {
-        // TODO add your handling code here:
-        if(evt.getKeyCode() == KeyEvent.VK_Q)
-            noiseButtonActionPerformed(null);
-    }
-
     private void saveActionPerformed(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
+        final JFileChooser fc = new JFileChooser();
+
+        fc.setCurrentDirectory(new File("./"));
+        int returnVal = fc.showOpenDialog(this);
+        String dir = "";
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            dir = fc.getSelectedFile().getAbsolutePath();
+        }
         try {
-            bw = new BufferedWriter(new FileWriter(new File("/Users/mhjang/Desktop/clearnlp/annotation/"+filenameSaved)));
+            bw = new BufferedWriter(new FileWriter(new File(dir+filenameSaved)));
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        MyListModel model = (MyListModel)jList1.getModel();
+        MyListModel model = (MyListModel) mainList.getModel();
         String[] data = model.getData();
         try{
             for(int i=0; i<data.length; i++) {
@@ -495,23 +904,140 @@ public class TaggerGUI extends javax.swing.JFrame {
 
     private void revertButtonActionPerformed(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
-        MyListModel model = (MyListModel)jList1.getModel();
-        DefaultListModel lm = (DefaultListModel)jList1.getModel();
-        String line = (String)jList1.getSelectedValue();
-        line = line.replace("<NOISE-A>", "");
-        line = line.replace("</NOISE-A>", "");
-        line = line.replace("<RELEVANT>", "");
-        line = line.replace("</RELEVANT>", "");
-        line = line.replace("<NOISE-B>", "");
-        line = line.replace("</NOISE-B>", "");
-        lm.setElementAt(line, jList1.getSelectedIndex());
+        JList activeObject;
+        boolean sentenceListActivated = false;
+        if(sentenceList.isSelectionEmpty())
+            activeObject = mainList;
+        else {
+            activeObject = sentenceList;
+            sentenceListActivated = true;
+        }
 
-        sentenceList.setModel(new MyListModel(line.split(" ")));
+         MyListModel lm = (MyListModel)activeObject.getModel();
+         String line = (String)activeObject.getSelectedValue();
+         String originalLine = line;
+        int index = activeObject.getSelectedIndex();
+
+        // If it is a close tag that we're trying to revert
+        for(String closeTag : closeTags) {
+            if (line.contains(closeTag)) {
+                line = line.replace(closeTag, "");
+                if(sentenceListActivated) {
+                    String fullSentence = (String) mainList.getSelectedValue();
+                    int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                    lastTaggedTokenIdx = tokenIdx;
+                    fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
+                    MyListModel jlistModel = (MyListModel) mainList.getModel();
+                    jlistModel.setElementAt(fullSentence, mainList.getSelectedIndex());
+                }
+                myCellRenderer.closeUndo(closeTag, mainList.getSelectedIndex());
+
+                initiatedTag = findMatchingBeginTagIdx(closeTag);
+                codeButton2.setEnabled(false);
+                miscButton2.setEnabled(false);
+                equButton2.setEnabled(false);
+                tableButton2.setEnabled(false);
+
+                equButton.setEnabled(false);
+                tableButton.setEnabled(false);
+                codeButton.setEnabled(false);
+                miscButton.setEnabled(false);
+
+                if(closeTag == tableTagClose)
+                    tableButton2.setEnabled(true);
+
+                if(closeTag == codeTagClose)
+                    codeButton2.setEnabled(true);
+
+                if(closeTag == equationTagClose)
+                    equButton2.setEnabled(true);
+
+                if(closeTag == miscTagClose)
+                    miscButton2.setEnabled(true);
+
+                int removeKey = -1;
+                for(Integer key : taggedZones.keySet()) {
+                    if(taggedZones.get(key) == mainList.getSelectedIndex()) {
+                        removeKey = key;
+                        break;
+                    }
+                }
+                taggedZones.remove(removeKey);
+            }
+        }
+
+        for(String tag: tags) {
+            if (line.contains(tag)) {
+                line = line.replace(tag, "");
+                int lineIdx = mainList.getSelectedIndex();
+                MyListModel jlistModel = (MyListModel) mainList.getModel();
+                if(sentenceListActivated) {
+                    String fullSentence = (String) mainList.getSelectedValue();
+                    int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                    lastTaggedTokenIdx = tokenIdx;
+                    fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
+                    jlistModel.setElementAt(fullSentence, lineIdx);
+                    sentenceList.setModel(new MyListModel(fullSentence.split(" ")));
+
+                }
+                // also remove the matching end tag
+                int endLineIdx = taggedZones.get(lineIdx);
+                String endTagLine = (String) jlistModel.getElementAt(endLineIdx);
+                endTagLine = endTagLine.replace(findMatchingEndTag(tag), "");
+                jlistModel.setElementAt(endTagLine, endLineIdx);
+                myCellRenderer.beginUndo(tag, mainList.getSelectedIndex());
+                taggedZones.remove(mainList.getSelectedIndex());
+
+                initiatedTag = -1;
+                equButton.setEnabled(true);
+                tableButton.setEnabled(true);
+                codeButton.setEnabled(true);
+                miscButton.setEnabled(true);
+
+
+                equButton2.setEnabled(false);
+                tableButton2.setEnabled(false);
+                codeButton2.setEnabled(false);
+                miscButton2.setEnabled(false);
+                break;
+            }
+
+
+        }
+
+        lm.setElementAt(line, index);
+
         jScrollPane1.revalidate();
         jScrollPane3.revalidate();
         sentenceList.repaint();
 
     }
+
+    private String replaceTagIfExists(String line, String beginTag, String endTag) {
+        for(String tag: tags) {
+            if(line.contains(tag)) {
+                line = line.replace(tag, beginTag);
+                line = line.replace(findMatchingEndTag(tag), endTag);
+                return line;
+            }
+        }
+        return line;
+    }
+
+    private String findMatchingEndTag(String beginTag) {
+        if(beginTag == tableTag) return tableTagClose;
+        else if(beginTag == codeTag) return codeTagClose;
+        else if(beginTag == equationTag) return equationTagClose;
+        else return miscTagClose;
+    }
+    private int findMatchingBeginTagIdx(String closeTag) {
+        if(closeTag == tableTagClose) return tableTagIdx;
+        else if(closeTag == codeTagClose) return codeTagIdx;
+        else if(closeTag == equationTagClose) return equTagIdx;
+        else return miscTagIdx;
+    }
+
+
 
     /**
      * @param args the command line arguments
@@ -544,7 +1070,8 @@ public class TaggerGUI extends javax.swing.JFrame {
             public void run() {
                 TaggerGUI tg = new TaggerGUI();
                 tg.setVisible(true);
-                tg.setSize(700, 500);
+                tg.setSize(1000, 700);
+       //         tg.pack();
 
 
 
@@ -557,34 +1084,45 @@ public class TaggerGUI extends javax.swing.JFrame {
     }
 
     public JButton getNoiseButton() {
-        return noiseButton;
+        return equButton;
     }
 
     public JButton getRelevantButton() {
-        return relevantButton;
+        return codeButton;
     }
 
     public JList getJList() {
-        return jList1;
+        return mainList;
     }
 
     public JScrollPane getJScrollPane() {
         return jScrollPane1;
     }
     // Variables declaration - do not modify
-    private javax.swing.JButton saveButton;
-    private javax.swing.JList jList1;
+    private JButton saveButton;
+    private javax.swing.JList mainList;
     private javax.swing.JList sentenceList;
-    private javax.swing.JMenu jMenu1;
-    private javax.swing.JMenu jMenu2;
-    private javax.swing.JMenuBar jMenuBar1;
-    private javax.swing.JMenuItem jMenuItem1;
-    private javax.swing.JButton revertButton;
+    private javax.swing.JMenu jMenu1File;
+    private javax.swing.JMenu jMenu3Tags;
+    private javax.swing.JMenu jMenu2Edit;
+    private javax.swing.JMenuBar menuBar;
+    private javax.swing.JMenuItem jMenu1ItemOpen;
+    private javax.swing.JMenuItem jMenu1ItemSave;
+
+    private JButton revertButton;
+    private javax.swing.JMenuItem addTagMenuItem;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JScrollPane jScrollPane3;
-    private javax.swing.JButton semanticNoiseButton;
-    private javax.swing.JButton noiseButton;
-    private javax.swing.JButton relevantButton;
+    private JButton tableButton;
+    private JButton equButton;
+    private JButton codeButton;
+    private JButton miscButton;
+
+    private JButton tableButton2;
+    private JButton equButton2;
+    private JButton codeButton2;
+    private JButton miscButton2;
+
 
     // End of variables declaration
 }

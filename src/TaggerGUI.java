@@ -113,7 +113,8 @@ public class TaggerGUI extends javax.swing.JFrame {
     static String[] tags = {equationTag, tableTag, codeTag, miscTag};
     static String[] closeTags = {equationTagClose, tableTagClose, codeTagClose, miscTagClose};
     static HashMap<Integer, Integer> taggedZones = new HashMap<Integer, Integer>();
-    WhiteYellowCellRenderer myCellRenderer = new WhiteYellowCellRenderer();
+    MainListCellRenderer myCellRenderer = new MainListCellRenderer();
+    SentenceListCellRenderer mySentenceCellRenderer  = new SentenceListCellRenderer();
     int initiatedTag = -1;
     static int tableTagIdx = 1;
     static int equTagIdx = 2;
@@ -136,107 +137,212 @@ public class TaggerGUI extends javax.swing.JFrame {
         //      jButton1.addActionListener(na);
     }
 
-
-    private static class WhiteYellowCellRenderer extends DefaultListCellRenderer {
+    private static class SentenceListCellRenderer extends DefaultListCellRenderer {
         static boolean isTableInitiated = false;
         static boolean isEquationInitiated = false;
         static boolean isCodeInitiated = false;
         static boolean isMiscInitiated = false;
 
         static int initiatedIdx = 0;
-        HashSet<Map.Entry<Integer, Integer>> tableCoverage = new HashSet<Entry<Integer, Integer>>();
-        HashSet<Map.Entry<Integer, Integer>> equCoverage = new HashSet<Entry<Integer, Integer>>();
-        HashSet<Map.Entry<Integer, Integer>> codeCoverage = new HashSet<Entry<Integer, Integer>>();
-        HashSet<Entry<Integer, Integer>> miscCoverage = new HashSet<Entry<Integer, Integer>>();
+        HashMap<Integer, Integer> tableCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> equCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> codeCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> miscCoverage = new HashMap<Integer, Integer>();
 
 
         static int endIdx = 0;
 
         public void closeUndo(String closeTag, int index) {
-            Entry<Integer, Integer> deleteObject = null;
+            Integer deleteIdx = -1;
+            HashMap<Integer, Integer> releventMap = null;
             if(closeTag == equationTagClose) {
-                for(Entry<Integer, Integer> e : equCoverage) {
-                    if(index == e.getValue()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                equCoverage.remove(deleteObject);
-
+                releventMap = equCoverage;
             }
             else if(closeTag == tableTagClose) {
-                for(Entry<Integer, Integer> e : tableCoverage) {
-                    if(index == e.getValue()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                tableCoverage.remove(deleteObject);
-
+                releventMap = tableCoverage;
             }
             else if(closeTag == codeTagClose) {
-                for(Entry<Integer, Integer> e : codeCoverage) {
-                    if(index == e.getValue()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                codeCoverage.remove(deleteObject);
+                releventMap = codeCoverage;
             }
             else if(closeTag == miscTagClose) {
-                for(Entry<Integer, Integer> e : miscCoverage) {
-                    if(index == e.getValue()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-
-                miscCoverage.remove(deleteObject);
+                releventMap = miscCoverage;
             }
 
+            for(Integer key : releventMap.keySet()) {
+                if(index == releventMap.get(key)) {
+                    deleteIdx = key;
+                    break;
+                }
+            }
+            releventMap.remove(deleteIdx);
         }
 
         public void beginUndo(String tag, int index) {
-            Entry<Integer, Integer> deleteObject = null;
+            HashMap<Integer, Integer> releventMap = null;
             if(tag == equationTag) {
-                for(Entry<Integer, Integer> e : equCoverage) {
-                    if(index == e.getKey()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                equCoverage.remove(deleteObject);
-
+                releventMap = equCoverage;
             }
             else if(tag == tableTag) {
-                for(Entry<Integer, Integer> e : tableCoverage) {
-                    if(index == e.getKey()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                tableCoverage.remove(deleteObject);
-
+                releventMap = tableCoverage;
             }
             else if(tag == codeTag) {
-                for(Entry<Integer, Integer> e : codeCoverage) {
-                    if(index == e.getKey()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-                codeCoverage.remove(deleteObject);
+                releventMap = codeCoverage;
             }
             else if(tag == miscTag) {
-                for(Entry<Integer, Integer> e : miscCoverage) {
-                    if(index == e.getKey()) {
-                        deleteObject = e;
-                        break;
-                    }
-                }
-
-                miscCoverage.remove(deleteObject);
+                releventMap = miscCoverage;
             }
+            releventMap.remove(index);
+
+        }
+        public Component getListCellRendererComponent( JList list, Object value, int index, boolean isSelected, boolean cellHasFocus ) {
+            Component c = super.getListCellRendererComponent( list, value, index, isSelected, cellHasFocus );
+            ListModel lm = list.getModel();
+            String line = (String)lm.getElementAt(index);
+            if(line.contains(tableTag)) {
+                isTableInitiated = true;
+                initiatedIdx = index;
+                c.setBackground(Color.cyan);
+                tableCoverage.put(initiatedIdx, lm.getSize());
+
+
+            }
+            else if(line.contains(equationTag)) {
+                isEquationInitiated = true;
+                initiatedIdx = index;
+                c.setBackground(Color.pink);
+                equCoverage.put(initiatedIdx, lm.getSize());
+
+
+            }
+            else if(line.contains(codeTag)) {
+                isCodeInitiated = true;
+                c.setBackground(Color.orange);
+                initiatedIdx = index;
+                codeCoverage.put(initiatedIdx, lm.getSize());
+
+            }
+            else if(line.contains(miscTag)) {
+                isMiscInitiated = true;
+                initiatedIdx = index;
+                c.setBackground(Color.yellow);
+                miscCoverage.put(initiatedIdx, lm.getSize());
+
+
+            }
+
+            if(line.contains(tableTagClose)) {
+                endIdx = index;
+                isTableInitiated = false;
+                tableCoverage.remove(initiatedIdx);
+                tableCoverage.put(initiatedIdx, endIdx);
+            }
+            else if(line.contains(equationTagClose)) {
+                endIdx = index;
+                isEquationInitiated = false;
+                equCoverage.remove(initiatedIdx);
+                equCoverage.put(initiatedIdx, endIdx);
+
+            }
+            else if(line.contains(codeTagClose)) {
+                endIdx = index;
+                isCodeInitiated = false;
+                codeCoverage.remove(initiatedIdx);
+                codeCoverage.put(initiatedIdx, endIdx);
+
+            }
+            else if(line.contains(miscTagClose)) {
+                endIdx = index;
+                isMiscInitiated = false;
+                miscCoverage.remove(initiatedIdx);
+                miscCoverage.put(initiatedIdx, endIdx);
+            }
+
+
+            for(Integer key: tableCoverage.keySet()) {
+                if(index >= key && index<=tableCoverage.get(key)) {
+                    c.setBackground(Color.blue);
+                }
+            }
+
+            for(Integer key: codeCoverage.keySet()) {
+                if(index >= key && index<=codeCoverage.get(key)) {
+                    c.setBackground(Color.orange);
+                }
+            }
+
+            for(Integer key: equCoverage.keySet()) {
+                if(index >= key && index<=equCoverage.get(key)) {
+                    c.setBackground(Color.pink);
+                }
+            }
+
+            for(Integer key: miscCoverage.keySet()) {
+                if(index >= key && index<=miscCoverage.get(key)) {
+                    c.setBackground(Color.yellow);
+                }
+            }
+
+
+            return c;
+        }
+
+    }
+
+    private static class MainListCellRenderer extends DefaultListCellRenderer {
+        static boolean isTableInitiated = false;
+        static boolean isEquationInitiated = false;
+        static boolean isCodeInitiated = false;
+        static boolean isMiscInitiated = false;
+
+        static int initiatedIdx = 0;
+        HashMap<Integer, Integer> tableCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> equCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> codeCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> miscCoverage = new HashMap<Integer, Integer>();
+
+
+        static int endIdx = 0;
+
+        public void closeUndo(String closeTag, int index) {
+            Integer deleteIdx = -1;
+            HashMap<Integer, Integer> releventMap = null;
+            if(closeTag == equationTagClose) {
+                releventMap = equCoverage;
+            }
+            else if(closeTag == tableTagClose) {
+                releventMap = tableCoverage;
+            }
+            else if(closeTag == codeTagClose) {
+                releventMap = codeCoverage;
+            }
+            else if(closeTag == miscTagClose) {
+                releventMap = miscCoverage;
+            }
+
+            for(Integer key : releventMap.keySet()) {
+                 if(index == releventMap.get(key)) {
+                     deleteIdx = key;
+                     break;
+                  }
+            }
+            releventMap.remove(deleteIdx);
+        }
+
+        public void beginUndo(String tag, int index) {
+            HashMap<Integer, Integer> releventMap = null;
+            if(tag == equationTag) {
+                releventMap = equCoverage;
+            }
+            else if(tag == tableTag) {
+                releventMap = tableCoverage;
+            }
+            else if(tag == codeTag) {
+                releventMap = codeCoverage;
+            }
+            else if(tag == miscTag) {
+                releventMap = miscCoverage;
+            }
+            releventMap.remove(index);
 
         }
         public Component getListCellRendererComponent( JList list, Object value, int index, boolean isSelected, boolean cellHasFocus ) {
@@ -246,7 +352,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                 if(line.contains(tableTag)) {
                     isTableInitiated = true;
                     initiatedIdx = index;
-                    c.setBackground(Color.blue);
+                    c.setBackground(Color.cyan);
 
                 }
                 else if(line.contains(equationTag)) {
@@ -271,55 +377,55 @@ public class TaggerGUI extends javax.swing.JFrame {
                 if(line.contains(tableTagClose)) {
                     endIdx = index;
                     isTableInitiated = false;
-                    tableCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+                    if(!tableCoverage.containsKey(initiatedIdx))
+                        tableCoverage.put(initiatedIdx, endIdx);
                 }
                 else if(line.contains(equationTagClose)) {
                     endIdx = index;
                     isEquationInitiated = false;
-                    equCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+                    if(!equCoverage.containsKey(initiatedIdx))
+                        equCoverage.put(initiatedIdx, endIdx);
 
                 }
                 else if(line.contains(codeTagClose)) {
                     endIdx = index;
                     isCodeInitiated = false;
-                    codeCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
+                    if(!codeCoverage.containsKey(initiatedIdx))
+                        codeCoverage.put(initiatedIdx, endIdx);
 
                 }
                 else if(line.contains(miscTagClose)) {
                     endIdx = index;
                     isMiscInitiated = false;
-
-                    miscCoverage.add(new AbstractMap.SimpleEntry<Integer, Integer>(initiatedIdx, endIdx));
-
+                    if(!miscCoverage.containsKey(initiatedIdx))
+                        miscCoverage.put(initiatedIdx, endIdx);
                 }
 
 
-                for(Entry<Integer, Integer> e: tableCoverage) {
-                    if(index >= e.getKey() && index<=e.getValue()) {
+                for(Integer key: tableCoverage.keySet()) {
+                    if(index >= key && index<=tableCoverage.get(key)) {
                         c.setBackground(Color.blue);
-                        System.out.println(e.getKey() + ": " + e.getValue());
-                  //      break;
                     }
-                //    if(index >= e.getValue()) break;
                 }
 
-                for(Entry<Integer, Integer> e: codeCoverage) {
-                    if(index >= e.getKey() && index<=e.getValue()) {
+                for(Integer key: codeCoverage.keySet()) {
+                    if(index >= key && index<=codeCoverage.get(key)) {
                         c.setBackground(Color.orange);
                     }
                 }
 
-                for(Entry<Integer, Integer> e: equCoverage) {
-                    if(index >= e.getKey() && index<=e.getValue()) {
+                for(Integer key: equCoverage.keySet()) {
+                    if(index >= key && index<=equCoverage.get(key)) {
                         c.setBackground(Color.pink);
                     }
                 }
 
-                for(Entry<Integer, Integer> e: miscCoverage) {
-                    if (index >= e.getKey() && index <= e.getValue()) {
+                for(Integer key: miscCoverage.keySet()) {
+                    if(index >= key && index<=miscCoverage.get(key)) {
                         c.setBackground(Color.yellow);
                     }
                 }
+
 
             return c;
         }
@@ -480,7 +586,7 @@ public class TaggerGUI extends javax.swing.JFrame {
             }
         });
 
-        revertButton.setText("Revert");
+        revertButton.setText("Undo");
         revertButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 revertButtonActionPerformed(evt);
@@ -491,6 +597,7 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         mainList.setModel(new MyListModel());
         mainList.setCellRenderer( myCellRenderer );
+        sentenceList.setCellRenderer( mySentenceCellRenderer);
 
         sentenceList.setModel(new MyListModel());
 

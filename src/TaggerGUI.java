@@ -10,6 +10,7 @@
 
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.*;
 import java.util.*;
 import java.util.logging.Level;
@@ -457,6 +458,8 @@ public class TaggerGUI extends javax.swing.JFrame {
         jMenu2Edit = new JMenu();
         jScrollPane3 =  new JScrollPane();
         sentenceList = new JList();
+        searchField = new JTextField();
+        jButton3 = new JButton();
         revertButton = new JButton();
         jMenu3Tags = new JMenu();
         addTagMenuItem = new JMenuItem();
@@ -468,7 +471,7 @@ public class TaggerGUI extends javax.swing.JFrame {
         codeButton2.setEnabled(false);
         miscButton2.setEnabled(false);
         equButton2.setEnabled(false);
-
+        jButton3.setText("Search Next");
         equButton.setText("Equation <--(CTR+W)");
         equButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control W"), "NOISE_ACTION_A");
         equButton.getActionMap().put("NOISE_ACTION_A", new AbstractAction() {
@@ -603,6 +606,14 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         jScrollPane1.setViewportView(mainList);
 
+        jButton3.addActionListener(new ActionListener() {
+
+            @Override
+            public void actionPerformed(ActionEvent evt) {
+                searchButtonActionPerformed(evt);
+            }
+        });
+
     /*    saveButton.setText("Save");
         saveButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -706,14 +717,22 @@ public class TaggerGUI extends javax.swing.JFrame {
                         .addGroup(layout.createSequentialGroup()
                                 .addComponent(jScrollPane1, GroupLayout.DEFAULT_SIZE, 314, javax.swing.GroupLayout.DEFAULT_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jScrollPane3, GroupLayout.PREFERRED_SIZE, 212, GroupLayout.PREFERRED_SIZE))
+                                .addComponent(jScrollPane3, GroupLayout.PREFERRED_SIZE, 250, GroupLayout.PREFERRED_SIZE))
+                                    .addGroup(layout.createSequentialGroup()
+                                    .addComponent(searchField, javax.swing.GroupLayout.PREFERRED_SIZE, 218, javax.swing.GroupLayout.PREFERRED_SIZE)
+                           //         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                    .addComponent(jButton3))
         );
         layout.setVerticalGroup(
                 layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                         .addGroup(layout.createSequentialGroup()
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                         .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 338, Short.MAX_VALUE)
-                                        .addComponent(jScrollPane3, GroupLayout.PREFERRED_SIZE, 212, GroupLayout.PREFERRED_SIZE))
+                                        .addComponent(jScrollPane3, GroupLayout.PREFERRED_SIZE, 500, GroupLayout.PREFERRED_SIZE))
+                           //             .addGap(2, 2, 2)
+                                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                                        .addComponent(searchField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addComponent(jButton3))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                                         .addComponent(equButton)
@@ -733,6 +752,10 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         pack();
     }// </editor-fold>
+
+    private void searchButtonActionPerformed(ActionEvent evt) {
+
+    }
 
 
     private void tagMenuClickedAction(ActionEvent evt) {
@@ -1229,6 +1252,9 @@ public class TaggerGUI extends javax.swing.JFrame {
     private JButton equButton2;
     private JButton codeButton2;
     private JButton miscButton2;
+
+    private JTextField searchField;
+    private JButton jButton3;
 
 
     // End of variables declaration

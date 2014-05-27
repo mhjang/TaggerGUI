@@ -8,6 +8,9 @@
  */
 
 
+import org.jdesktop.swingx.JXList;
+import org.jdesktop.swingx.search.ListSearchable;
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -121,6 +124,7 @@ public class TaggerGUI extends javax.swing.JFrame {
     static int equTagIdx = 2;
     static int codeTagIdx = 3;
     static int miscTagIdx = 4;
+    static ListSearchable listsearchable;
 
     int lastTaggedLineIdx = -1;
     int lastTaggedTokenIdx = -1;
@@ -450,7 +454,7 @@ public class TaggerGUI extends javax.swing.JFrame {
         tableButton2 = new JButton();
         miscButton2 = new JButton();
         jScrollPane1 = new JScrollPane();
-        mainList = new JList();
+        mainList = new JXList();
         saveButton = new JButton();
         menuBar = new JMenuBar();
         jMenu1File = new JMenu();
@@ -472,6 +476,14 @@ public class TaggerGUI extends javax.swing.JFrame {
         miscButton2.setEnabled(false);
         equButton2.setEnabled(false);
         jButton3.setText("Search Next");
+        jButton3.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("Enter"), "SEARCH");
+        jButton3.getActionMap().put("SEARCH", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                jButton3.doClick();
+            }
+        });
+
         equButton.setText("Equation <--(CTR+W)");
         equButton.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control W"), "NOISE_ACTION_A");
         equButton.getActionMap().put("NOISE_ACTION_A", new AbstractAction() {
@@ -600,6 +612,8 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         mainList.setModel(new MyListModel());
         mainList.setCellRenderer( myCellRenderer );
+        listsearchable = new ListSearchable((org.jdesktop.swingx.JXList) mainList);
+
         sentenceList.setCellRenderer( mySentenceCellRenderer);
 
         sentenceList.setModel(new MyListModel());
@@ -639,6 +653,7 @@ public class TaggerGUI extends javax.swing.JFrame {
             }
         });
 
+
         mainList.addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) throws NullPointerException {
@@ -667,16 +682,19 @@ public class TaggerGUI extends javax.swing.JFrame {
 
 
         jMenu1File.add(jMenu1ItemOpen);
+        jMenu1File.add(jMenu1ItemSave);
+
         menuBar.add(jMenu1File);
         jMenu2Edit.setText("Edit");
-        menuBar.add(jMenu2Edit);
+     //   menuBar.add(jMenu2Edit);
 
         jMenu3Tags.setText("Tags");
         addTagMenuItem.setText("Add Tags");
         jMenu3Tags.add(addTagMenuItem);
-        menuBar.add(jMenu3Tags);
+    //    menuBar.add(jMenu3Tags);
         setJMenuBar(menuBar);
 
+        getRootPane().setDefaultButton(jButton3);
 
         addTagMenuItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -754,6 +772,9 @@ public class TaggerGUI extends javax.swing.JFrame {
     }// </editor-fold>
 
     private void searchButtonActionPerformed(ActionEvent evt) {
+       int idx = listsearchable.search(searchField.getText(), mainList.getSelectedIndex()>0?mainList.getSelectedIndex():0);
+       if(idx == -1) JOptionPane.showMessageDialog(this, "Not found!");
+       else mainList.setSelectedIndex(idx);
 
     }
 
@@ -980,7 +1001,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                 ArrayList<String> data = new ArrayList<String>();
                 while((line = br.readLine())!= null) {
                     if(!line.isEmpty())
-                        data.add(line);
+                        data.add(line.replace("<BR>",""));
                 }
                 String[] dataAsString = new String[data.size()];
                 data.toArray(dataAsString);
@@ -1004,13 +1025,15 @@ public class TaggerGUI extends javax.swing.JFrame {
         final JFileChooser fc = new JFileChooser();
 
         fc.setCurrentDirectory(new File("./"));
-        int returnVal = fc.showOpenDialog(this);
+        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        int returnVal = fc.showSaveDialog(this);
         String dir = "";
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             dir = fc.getSelectedFile().getAbsolutePath();
+            System.out.println(dir);
         }
         try {
-            bw = new BufferedWriter(new FileWriter(new File(dir+filenameSaved)));
+            bw = new BufferedWriter(new FileWriter(new File(dir+"/"+filenameSaved)));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -1023,8 +1046,9 @@ public class TaggerGUI extends javax.swing.JFrame {
 
             }
             bw.flush();
-            JOptionPane.showMessageDialog(this, "Saved at" + filenameSaved);
+            JOptionPane.showMessageDialog(this, "Saved at " + dir +"/"+filenameSaved);
             saveButton.setEnabled(false);
+            bw.close();
         }catch(Exception e) {
             e.printStackTrace();
         }
@@ -1230,7 +1254,7 @@ public class TaggerGUI extends javax.swing.JFrame {
     }
     // Variables declaration - do not modify
     private JButton saveButton;
-    private javax.swing.JList mainList;
+    private JXList mainList;
     private javax.swing.JList sentenceList;
     private javax.swing.JMenu jMenu1File;
     private javax.swing.JMenu jMenu3Tags;

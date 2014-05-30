@@ -16,17 +16,13 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-
-import static java.util.Map.Entry;
-
-
-
 
 
 class NoiseAction extends AbstractAction {
@@ -128,9 +124,11 @@ public class TaggerGUI extends javax.swing.JFrame {
 
     int lastTaggedLineIdx = -1;
     int lastTaggedTokenIdx = -1;
+    double startTime = 0.0, endTime = 0.0;
 
     // line number of the most recent tag, so that the end tag can't be above it
-    static int initiatedLineNum = 0;
+    // when it's all nicely paired-up, it's set to -1
+    static int initiatedLineNum = -2;
 
     /**
      * Creates new form NewJFrame
@@ -207,30 +205,23 @@ public class TaggerGUI extends javax.swing.JFrame {
                 isTableInitiated = true;
                 initiatedIdx = index;
                 c.setBackground(Color.cyan);
-                tableCoverage.put(initiatedIdx, lm.getSize());
-
-
             }
             else if(line.contains(equationTag)) {
                 isEquationInitiated = true;
                 initiatedIdx = index;
                 c.setBackground(Color.pink);
-                equCoverage.put(initiatedIdx, lm.getSize());
-
 
             }
             else if(line.contains(codeTag)) {
                 isCodeInitiated = true;
                 c.setBackground(Color.orange);
                 initiatedIdx = index;
-                codeCoverage.put(initiatedIdx, lm.getSize());
 
             }
             else if(line.contains(miscTag)) {
                 isMiscInitiated = true;
                 initiatedIdx = index;
                 c.setBackground(Color.yellow);
-                miscCoverage.put(initiatedIdx, lm.getSize());
 
 
             }
@@ -238,35 +229,31 @@ public class TaggerGUI extends javax.swing.JFrame {
             if(line.contains(tableTagClose)) {
                 endIdx = index;
                 isTableInitiated = false;
-                tableCoverage.remove(initiatedIdx);
-                tableCoverage.put(initiatedIdx, endIdx);
-            }
+                  }
             else if(line.contains(equationTagClose)) {
                 endIdx = index;
                 isEquationInitiated = false;
-                equCoverage.remove(initiatedIdx);
-                equCoverage.put(initiatedIdx, endIdx);
 
             }
             else if(line.contains(codeTagClose)) {
                 endIdx = index;
                 isCodeInitiated = false;
-                codeCoverage.remove(initiatedIdx);
-                codeCoverage.put(initiatedIdx, endIdx);
+
 
             }
             else if(line.contains(miscTagClose)) {
                 endIdx = index;
                 isMiscInitiated = false;
-                miscCoverage.remove(initiatedIdx);
-                miscCoverage.put(initiatedIdx, endIdx);
             }
 
+            if(list.isSelectedIndex(index))
+                c.setForeground(Color.red);
 
             for(Integer key: tableCoverage.keySet()) {
                 if(index >= key && index<=tableCoverage.get(key)) {
-                    c.setBackground(Color.blue);
+                    c.setBackground(Color.cyan);
                 }
+
             }
 
             for(Integer key: codeCoverage.keySet()) {
@@ -407,27 +394,42 @@ public class TaggerGUI extends javax.swing.JFrame {
                 }
 
 
+
+
+
                 for(Integer key: tableCoverage.keySet()) {
                     if(index >= key && index<=tableCoverage.get(key)) {
-                        c.setBackground(Color.blue);
+                        c.setBackground(Color.cyan);
+                        if(list.isSelectedIndex(index))
+                            c.setForeground(Color.red);
+
                     }
                 }
 
                 for(Integer key: codeCoverage.keySet()) {
                     if(index >= key && index<=codeCoverage.get(key)) {
                         c.setBackground(Color.orange);
+                        if(list.isSelectedIndex(index))
+                            c.setForeground(Color.red);
+
                     }
                 }
 
                 for(Integer key: equCoverage.keySet()) {
                     if(index >= key && index<=equCoverage.get(key)) {
                         c.setBackground(Color.pink);
+                        if(list.isSelectedIndex(index))
+                            c.setForeground(Color.red);
+
                     }
                 }
 
                 for(Integer key: miscCoverage.keySet()) {
                     if(index >= key && index<=miscCoverage.get(key)) {
                         c.setBackground(Color.yellow);
+                        if(list.isSelectedIndex(index))
+                            c.setForeground(Color.red);
+
                     }
                 }
 
@@ -986,8 +988,9 @@ public class TaggerGUI extends javax.swing.JFrame {
 
     private void fileOpenMenuClicked(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
+        initiatedLineNum = -2;
         saveButton.setEnabled(true);
-
+        startTime = System.nanoTime();
         final JFileChooser fc = new JFileChooser();
 
         fc.setCurrentDirectory(new File("./"));
@@ -999,9 +1002,33 @@ public class TaggerGUI extends javax.swing.JFrame {
                 BufferedReader br = new BufferedReader(new FileReader(file));
                 String line;
                 ArrayList<String> data = new ArrayList<String>();
+                int lineNum = 0;
+                String closeTag;
+                closeTag = null;
+
                 while((line = br.readLine())!= null) {
-                    if(!line.isEmpty())
-                        data.add(line.replace("<BR>",""));
+                    if(!line.isEmpty()) {
+                        line = line.replace("<BR>", "");
+          //              line = line.trim();
+                        data.add(line.replace("<BR>", ""));
+                        for(String tag: tags) {
+                            if (line.contains(tag)) {
+                                initiatedLineNum = lineNum;
+                                closeTag = findMatchingEndTag(tag);
+                            }
+                        }
+                        System.out.println(closeTag);
+                        if(initiatedLineNum > 0) {
+                            if(line.contains(closeTag)) {
+                                taggedZones.put(initiatedLineNum, lineNum);
+                                initiatedLineNum = -1;
+                                closeTag = null;
+                            }
+                        }
+                        lineNum++;
+
+                    }
+
                 }
                 String[] dataAsString = new String[data.size()];
                 data.toArray(dataAsString);
@@ -1023,7 +1050,7 @@ public class TaggerGUI extends javax.swing.JFrame {
     private void saveActionPerformed(java.awt.event.ActionEvent evt) {
         // TODO add your handling code here:
         final JFileChooser fc = new JFileChooser();
-
+        endTime = System.nanoTime();
         fc.setCurrentDirectory(new File("./"));
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnVal = fc.showSaveDialog(this);
@@ -1033,7 +1060,7 @@ public class TaggerGUI extends javax.swing.JFrame {
             System.out.println(dir);
         }
         try {
-            bw = new BufferedWriter(new FileWriter(new File(dir+"/"+filenameSaved)));
+            bw = new BufferedWriter(new FileWriter(new File(dir+"/"+filenameSaved + ".tagged")));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -1046,7 +1073,9 @@ public class TaggerGUI extends javax.swing.JFrame {
 
             }
             bw.flush();
-            JOptionPane.showMessageDialog(this, "Saved at " + dir +"/"+filenameSaved);
+            JOptionPane.showMessageDialog(this, "Saved at " + dir + "/" + filenameSaved + ".tagged");
+            JOptionPane.showMessageDialog(this, TimeUnit.MINUTES.convert((long) (endTime - startTime), TimeUnit.NANOSECONDS) + " minutes took");
+
             saveButton.setEnabled(false);
             bw.close();
         }catch(Exception e) {
@@ -1069,13 +1098,56 @@ public class TaggerGUI extends javax.swing.JFrame {
 
          MyListModel lm = (MyListModel)activeObject.getModel();
          String line = (String)activeObject.getSelectedValue();
-         String originalLine = line;
-        int index = activeObject.getSelectedIndex();
+         int index = activeObject.getSelectedIndex();
 
+        int mainLineNum = mainList.getSelectedIndex();
+        if(taggedZones.containsKey(mainLineNum))
+            removeBeginTagPair(line, index, sentenceListActivated);
+        else {
+            removeBeginTag(line, index, sentenceListActivated);
+            Integer latestKey = null;
+            for (Integer key : taggedZones.keySet()) {
+       //         System.out.println(key);
+                if (mainList.getSelectedIndex() > key)
+                    latestKey = key;
+  //              else break;
+            }
+            if(latestKey != null) {
+                MyListModel jlistModel = (MyListModel) mainList.getModel();
+     //           System.out.println("latest key:" + latestKey);
+                int endKey = taggedZones.get(latestKey);
+                if (mainList.getSelectedIndex() != taggedZones.get(latestKey)) {
+                    String beginLine = (String) jlistModel.getElementAt(latestKey);
+                    System.out.println(beginLine);
+                    line = removeBeginTagPair(beginLine, latestKey, sentenceListActivated);
+                    taggedZones.remove(latestKey);
+                    initiatedLineNum = -1;
+                    lm.setElementAt(line, latestKey);
+
+                }
+                else {
+                    String endLine = (String) jlistModel.getElementAt(endKey);
+                    line = removeEndTag(endLine, endKey, sentenceListActivated);
+                    lm.setElementAt(line, endKey);
+                    initiatedLineNum = latestKey;
+                }
+            }
+
+        }
+
+        jScrollPane1.revalidate();
+        jScrollPane3.revalidate();
+        sentenceList.repaint();
+
+    }
+
+    private String removeEndTag(String line, int index, boolean sentenceListActivated) {
         // If it is a close tag that we're trying to revert
         for(String closeTag : closeTags) {
             if (line.contains(closeTag)) {
                 line = line.replace(closeTag, "");
+                String originalLine = line;
+
                 if(sentenceListActivated) {
                     String fullSentence = (String) mainList.getSelectedValue();
                     int tokenIdx = findIndexOfNthToken(fullSentence, index);
@@ -1083,6 +1155,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                     fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
                     MyListModel jlistModel = (MyListModel) mainList.getModel();
                     jlistModel.setElementAt(fullSentence, mainList.getSelectedIndex());
+                    mySentenceCellRenderer.closeUndo(closeTag, sentenceList.getSelectedIndex());
                 }
                 myCellRenderer.closeUndo(closeTag, mainList.getSelectedIndex());
 
@@ -1117,12 +1190,28 @@ public class TaggerGUI extends javax.swing.JFrame {
                     }
                 }
                 taggedZones.remove(removeKey);
+                myCellRenderer.closeUndo(closeTag, mainList.getSelectedIndex());
+
             }
         }
 
+        return line;
+    }
+
+
+    /**
+     *
+     * @param line
+     * @param index
+     * @param sentenceListActivated
+     * @return
+     */
+    private boolean removeBeginTag(String line, int index, boolean sentenceListActivated) {
         for(String tag: tags) {
             if (line.contains(tag)) {
                 line = line.replace(tag, "");
+                String originalLine = line;
+
                 int lineIdx = mainList.getSelectedIndex();
                 MyListModel jlistModel = (MyListModel) mainList.getModel();
                 if(sentenceListActivated) {
@@ -1132,14 +1221,69 @@ public class TaggerGUI extends javax.swing.JFrame {
                     fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
                     jlistModel.setElementAt(fullSentence, lineIdx);
                     sentenceList.setModel(new MyListModel(fullSentence.split(" ")));
+                    ListCellRenderer lcr = sentenceList.getCellRenderer();
+                    mySentenceCellRenderer.beginUndo(tag, sentenceList.getSelectedIndex());
+
+                }
+                myCellRenderer.beginUndo(tag, index);
+                jlistModel.setElementAt(line, index);
+
+                initiatedTag = -1;
+                equButton.setEnabled(true);
+                tableButton.setEnabled(true);
+                codeButton.setEnabled(true);
+                miscButton.setEnabled(true);
+
+
+                equButton2.setEnabled(false);
+                tableButton2.setEnabled(false);
+                codeButton2.setEnabled(false);
+                miscButton2.setEnabled(false);
+                return true;
+            }
+
+
+
+       }
+        return false;
+    }
+
+
+
+    /**
+     *
+     * @param line
+     * @param index
+     * @param sentenceListActivated
+     * @return
+     */
+    private String removeBeginTagPair(String line, int index, boolean sentenceListActivated) {
+        for(String tag: tags) {
+            if (line.contains(tag)) {
+                line = line.replace(tag, "");
+                String originalLine = line;
+
+                int lineIdx = mainList.getSelectedIndex();
+                MyListModel jlistModel = (MyListModel) mainList.getModel();
+                if(sentenceListActivated) {
+                    String fullSentence = (String) mainList.getSelectedValue();
+                    int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                    lastTaggedTokenIdx = tokenIdx;
+                    fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
+                    jlistModel.setElementAt(fullSentence, lineIdx);
+                    sentenceList.setModel(new MyListModel(fullSentence.split(" ")));
+                    ListCellRenderer lcr = sentenceList.getCellRenderer();
+                    mySentenceCellRenderer.beginUndo(tag, sentenceList.getSelectedIndex());
 
                 }
                 // also remove the matching end tag
-                int endLineIdx = taggedZones.get(lineIdx);
+                int endLineIdx = taggedZones.get(index);
                 String endTagLine = (String) jlistModel.getElementAt(endLineIdx);
                 endTagLine = endTagLine.replace(findMatchingEndTag(tag), "");
                 jlistModel.setElementAt(endTagLine, endLineIdx);
-                myCellRenderer.beginUndo(tag, mainList.getSelectedIndex());
+
+                jlistModel.setElementAt(line, index);
+                myCellRenderer.beginUndo(tag, index);
                 taggedZones.remove(mainList.getSelectedIndex());
 
                 initiatedTag = -1;
@@ -1158,14 +1302,10 @@ public class TaggerGUI extends javax.swing.JFrame {
 
 
         }
-
-        lm.setElementAt(line, index);
-
-        jScrollPane1.revalidate();
-        jScrollPane3.revalidate();
-        sentenceList.repaint();
-
+        return line;
     }
+
+
 
     private String replaceTagIfExists(String line, String beginTag, String endTag) {
         for(String tag: tags) {

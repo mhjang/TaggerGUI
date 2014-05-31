@@ -8,6 +8,7 @@
  */
 
 
+import com.sun.codemodel.internal.JOp;
 import org.jdesktop.swingx.JXList;
 import org.jdesktop.swingx.search.ListSearchable;
 
@@ -213,7 +214,7 @@ public class TaggerGUI extends javax.swing.JFrame {
             }
             else if(line.contains(miscTag)) {
                 c.setBackground(Color.yellow);
-        }
+            }
 
             if(list.isSelectedIndex(index))
                 c.setForeground(Color.red);
@@ -1076,59 +1077,61 @@ public class TaggerGUI extends javax.swing.JFrame {
         // TODO add your handling code here:
         JList activeObject;
         boolean sentenceListActivated = false;
-        if(sentenceList.isSelectionEmpty())
+        if (sentenceList.isSelectionEmpty())
             activeObject = mainList;
         else {
             activeObject = sentenceList;
             sentenceListActivated = true;
         }
 
-         MyListModel lm = (MyListModel)activeObject.getModel();
-         String line = (String)activeObject.getSelectedValue();
-         int index = activeObject.getSelectedIndex();
+        MyListModel lm = (MyListModel) activeObject.getModel();
+        String line = (String) activeObject.getSelectedValue();
+        int index = activeObject.getSelectedIndex();
 
         int mainLineNum = mainList.getSelectedIndex();
-        if(taggedZones.containsKey(mainLineNum))
+        if (taggedZones.containsKey(mainLineNum))
             removeBeginTagPair(line, index, sentenceListActivated);
-        else {
-            removeBeginTag(line, index, sentenceListActivated);
+        else if (!removeBeginTag(line, sentenceListActivated)) {
             Integer latestKey = null;
             for (Integer key : taggedZones.keySet()) {
-       //         System.out.println(key);
-                if (mainList.getSelectedIndex() > key)
+                //         System.out.println(key);
+                if (mainList.getSelectedIndex() >= key && mainList.getSelectedIndex() <= taggedZones.get(key))
                     latestKey = key;
-  //              else break;
             }
-            if(latestKey != null) {
-                MyListModel jlistModel = (MyListModel) mainList.getModel();
-     //           System.out.println("latest key:" + latestKey);
+            if (latestKey == null) {
+                JOptionPane.showMessageDialog(this, "Please select a tagged area where you want to unto tagging!");
+                return;
+            } else {
+                MyListModel mainListModel = (MyListModel) mainList.getModel();
+                //           System.out.println("latest key:" + latestKey);
                 int endKey = taggedZones.get(latestKey);
+
                 if (mainList.getSelectedIndex() != taggedZones.get(latestKey)) {
-                    String beginLine = (String) jlistModel.getElementAt(latestKey);
-                 //   System.out.println(beginLine);
+                    String beginLine = (String) mainListModel.getElementAt(latestKey);
+                    //   System.out.println(beginLine);
                     line = removeBeginTagPair(beginLine, latestKey, sentenceListActivated);
                     taggedZones.remove(latestKey);
                     initiatedLineNum = -1;
                     lm.setElementAt(line, latestKey);
 
-                }
-                else {
-                    String endLine = (String) jlistModel.getElementAt(endKey);
-                    line = removeEndTag(endLine, endKey, sentenceListActivated);
-                    lm.setElementAt(line, endKey);
+                } else {
+                    String endLine = (String) mainListModel.getElementAt(endKey);
+                    // find an index where a close tag locates
+                    line = removeEndTag(endLine, sentenceListActivated);
+                    mainListModel.setElementAt(line, mainList.getSelectedIndex());
+
                     initiatedLineNum = latestKey;
-                }
-            }
+                  }
+             }
+
+            jScrollPane1.revalidate();
+            jScrollPane3.revalidate();
+            sentenceList.repaint();
 
         }
-
-        jScrollPane1.revalidate();
-        jScrollPane3.revalidate();
-        sentenceList.repaint();
-
     }
 
-    private String removeEndTag(String line, int index, boolean sentenceListActivated) {
+    private String removeEndTag(String line, boolean sentenceListActivated) {
         // If it is a close tag that we're trying to revert
         for(String closeTag : closeTags) {
             if (line.contains(closeTag)) {
@@ -1137,11 +1140,23 @@ public class TaggerGUI extends javax.swing.JFrame {
 
                 if(sentenceListActivated) {
                     String fullSentence = (String) mainList.getSelectedValue();
+                    MyListModel sentenceModel = (MyListModel) sentenceList.getModel();
+
+                    String[] tokens = sentenceModel.getData();
+                    int index = 0;
+                    for(String token : tokens) {
+                        if(token.contains(closeTag))
+                            break;
+                        index++;
+                    }
                     int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                    String token = (String) sentenceModel.getElementAt(index);
+                    token = token.replace(closeTag, "");
+                    sentenceModel.setElementAt(token, index);
                     lastTaggedTokenIdx = tokenIdx;
                     fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
-                    MyListModel jlistModel = (MyListModel) mainList.getModel();
-                    jlistModel.setElementAt(fullSentence, mainList.getSelectedIndex());
+                    MyListModel mainModel = (MyListModel) mainList.getModel();
+                    mainModel.setElementAt(fullSentence, mainList.getSelectedIndex());
                     mySentenceCellRenderer.closeUndo(closeTag, sentenceList.getSelectedIndex());
                 }
                 myCellRenderer.closeUndo(closeTag, mainList.getSelectedIndex());
@@ -1189,11 +1204,10 @@ public class TaggerGUI extends javax.swing.JFrame {
     /**
      *
      * @param line
-     * @param index
      * @param sentenceListActivated
      * @return
      */
-    private boolean removeBeginTag(String line, int index, boolean sentenceListActivated) {
+    private boolean removeBeginTag(String line, boolean sentenceListActivated) {
         for(String tag: tags) {
             if (line.contains(tag)) {
                 line = line.replace(tag, "");
@@ -1203,7 +1217,20 @@ public class TaggerGUI extends javax.swing.JFrame {
                 MyListModel jlistModel = (MyListModel) mainList.getModel();
                 if(sentenceListActivated) {
                     String fullSentence = (String) mainList.getSelectedValue();
+                    MyListModel sentenceModel = (MyListModel) sentenceList.getModel();
+                    String[] tokens = sentenceModel.getData();
+                    int index = 0;
+                    for(String token : tokens) {
+                        if(token.contains(tag))
+                            break;
+                        index++;
+                    }
                     int tokenIdx = findIndexOfNthToken(fullSentence, index);
+                    String token = (String) sentenceModel.getElementAt(index);
+                    token = token.replace(tag, "");
+                    System.out.println(token);
+                    sentenceModel.setElementAt(token, index);
+
                     lastTaggedTokenIdx = tokenIdx;
                     fullSentence = fullSentence.substring(0, tokenIdx) + fullSentence.substring(tokenIdx).replaceFirst(Pattern.quote(originalLine), line);
                     jlistModel.setElementAt(fullSentence, lineIdx);
@@ -1212,8 +1239,8 @@ public class TaggerGUI extends javax.swing.JFrame {
                     mySentenceCellRenderer.beginUndo(tag, sentenceList.getSelectedIndex());
 
                 }
-                myCellRenderer.beginUndo(tag, index);
-                jlistModel.setElementAt(line, index);
+                myCellRenderer.beginUndo(tag, mainList.getSelectedIndex());
+                jlistModel.setElementAt(line, mainList.getSelectedIndex());
 
                 initiatedTag = -1;
                 equButton.setEnabled(true);
@@ -1263,13 +1290,14 @@ public class TaggerGUI extends javax.swing.JFrame {
                     mySentenceCellRenderer.beginUndo(tag, sentenceList.getSelectedIndex());
 
                 }
+                jlistModel.setElementAt(line, index);
+
                 // also remove the matching end tag
                 int endLineIdx = taggedZones.get(index);
                 String endTagLine = (String) jlistModel.getElementAt(endLineIdx);
                 endTagLine = endTagLine.replace(findMatchingEndTag(tag), "");
                 jlistModel.setElementAt(endTagLine, endLineIdx);
 
-                jlistModel.setElementAt(line, index);
                 myCellRenderer.beginUndo(tag, index);
                 taggedZones.remove(mainList.getSelectedIndex());
 

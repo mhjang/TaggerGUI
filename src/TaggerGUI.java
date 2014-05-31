@@ -202,49 +202,18 @@ public class TaggerGUI extends javax.swing.JFrame {
             ListModel lm = list.getModel();
             String line = (String)lm.getElementAt(index);
             if(line.contains(tableTag)) {
-                isTableInitiated = true;
-                initiatedIdx = index;
                 c.setBackground(Color.cyan);
             }
             else if(line.contains(equationTag)) {
-                isEquationInitiated = true;
-                initiatedIdx = index;
-                c.setBackground(Color.pink);
+                 c.setBackground(Color.pink);
 
             }
             else if(line.contains(codeTag)) {
-                isCodeInitiated = true;
                 c.setBackground(Color.orange);
-                initiatedIdx = index;
-
             }
             else if(line.contains(miscTag)) {
-                isMiscInitiated = true;
-                initiatedIdx = index;
                 c.setBackground(Color.yellow);
-
-
-            }
-
-            if(line.contains(tableTagClose)) {
-                endIdx = index;
-                isTableInitiated = false;
-                  }
-            else if(line.contains(equationTagClose)) {
-                endIdx = index;
-                isEquationInitiated = false;
-
-            }
-            else if(line.contains(codeTagClose)) {
-                endIdx = index;
-                isCodeInitiated = false;
-
-
-            }
-            else if(line.contains(miscTagClose)) {
-                endIdx = index;
-                isMiscInitiated = false;
-            }
+        }
 
             if(list.isSelectedIndex(index))
                 c.setForeground(Color.red);
@@ -335,6 +304,18 @@ public class TaggerGUI extends javax.swing.JFrame {
                 releventMap = miscCoverage;
             }
             releventMap.remove(index);
+
+        }
+
+        public void addReigion(int startIdx, int endIdx, int component) {
+            if(component == tableTagIdx)
+                tableCoverage.put(startIdx, endIdx);
+            else if(component == codeTagIdx)
+                codeCoverage.put(startIdx, endIdx);
+            else if(component == equTagIdx)
+                equCoverage.put(startIdx, endIdx);
+            else if(component == miscTagIdx)
+                miscCoverage.put(startIdx, endIdx);
 
         }
         public Component getListCellRendererComponent( JList list, Object value, int index, boolean isSelected, boolean cellHasFocus ) {
@@ -431,6 +412,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                             c.setForeground(Color.red);
 
                     }
+                    System.out.println(key + "~" + miscCoverage.get(key));
                 }
 
 
@@ -846,8 +828,7 @@ public class TaggerGUI extends javax.swing.JFrame {
         else if(evt.getSource() == miscButton) {
             beginTag = miscTag;
             closeTag = miscTagClose;
-                initiatedTag = miscTagIdx;
-
+            initiatedTag = miscTagIdx;
             miscButton2.setEnabled(true);
 
         }
@@ -924,23 +905,27 @@ public class TaggerGUI extends javax.swing.JFrame {
         equButton2.setEnabled(false);
 
         String beginTag = null, closeTag = null;
-
+        int component = -1;
         if(evt.getSource() == equButton2) {
             beginTag = equationTag;
             closeTag = equationTagClose;
+            component = equTagIdx;
         }
         else if(evt.getSource() == tableButton2) {
             beginTag = tableTag;
             closeTag = tableTagClose;
+            component = tableTagIdx;
         }
         else if(evt.getSource() == codeButton2) {
             beginTag = codeTag;
             closeTag = codeTagClose;
+            component = codeTagIdx;
 
         }
         else if(evt.getSource() == miscButton2) {
             beginTag = miscTag;
             closeTag = miscTagClose;
+            component = miscTagIdx;
         }
         if(initiatedTag == -1)
             JOptionPane.showMessageDialog(this, "Can't end a tag that was not initiated");
@@ -979,6 +964,8 @@ public class TaggerGUI extends javax.swing.JFrame {
 
         }
         taggedZones.put(initiatedLineNum, endIdx);
+        myCellRenderer.addReigion(initiatedLineNum, endIdx, component);
+
 
         // trace back to the most recent opening tag
         //; if not matched alert
@@ -1017,7 +1004,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                                 closeTag = findMatchingEndTag(tag);
                             }
                         }
-                        System.out.println(closeTag);
+                      //  System.out.println(closeTag);
                         if(initiatedLineNum > 0) {
                             if(line.contains(closeTag)) {
                                 taggedZones.put(initiatedLineNum, lineNum);
@@ -1118,7 +1105,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                 int endKey = taggedZones.get(latestKey);
                 if (mainList.getSelectedIndex() != taggedZones.get(latestKey)) {
                     String beginLine = (String) jlistModel.getElementAt(latestKey);
-                    System.out.println(beginLine);
+                 //   System.out.println(beginLine);
                     line = removeBeginTagPair(beginLine, latestKey, sentenceListActivated);
                     taggedZones.remove(latestKey);
                     initiatedLineNum = -1;

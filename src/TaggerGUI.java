@@ -148,14 +148,24 @@ public class TaggerGUI extends javax.swing.JFrame {
         static boolean isMiscInitiated = false;
 
         static int initiatedIdx = 0;
-        HashMap<Integer, Integer> tableCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> equCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> codeCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> miscCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> tableCoverage;
+        HashMap<Integer, Integer> equCoverage;
+        HashMap<Integer, Integer> codeCoverage;
+        HashMap<Integer, Integer> miscCoverage;
 
 
         static int endIdx = 0;
 
+        public SentenceListCellRenderer() {
+            initialize();
+        }
+
+        public void initialize() {
+            tableCoverage = new HashMap<Integer, Integer>();
+            equCoverage = new HashMap<Integer, Integer>();
+            codeCoverage = new HashMap<Integer, Integer>();
+            miscCoverage = new HashMap<Integer, Integer>();
+        }
         public void closeUndo(String closeTag, int index) {
             Integer deleteIdx = -1;
             HashMap<Integer, Integer> releventMap = null;
@@ -257,11 +267,21 @@ public class TaggerGUI extends javax.swing.JFrame {
         static boolean isMiscInitiated = false;
 
         static int initiatedIdx = 0;
-        HashMap<Integer, Integer> tableCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> equCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> codeCoverage = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> miscCoverage = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> tableCoverage;
+        HashMap<Integer, Integer> equCoverage;
+        HashMap<Integer, Integer> codeCoverage;
+        HashMap<Integer, Integer> miscCoverage;
 
+
+        public MainListCellRenderer() {
+            initialize();
+        }
+        public void initialize() {
+            tableCoverage = new HashMap<Integer, Integer>();
+            equCoverage = new HashMap<Integer, Integer>();
+            codeCoverage = new HashMap<Integer, Integer>();
+            miscCoverage = new HashMap<Integer, Integer>();
+        }
 
         static int endIdx = 0;
 
@@ -413,7 +433,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                             c.setForeground(Color.red);
 
                     }
-                    System.out.println(key + "~" + miscCoverage.get(key));
+          //          System.out.println(key + "~" + miscCoverage.get(key));
                 }
 
 
@@ -981,7 +1001,7 @@ public class TaggerGUI extends javax.swing.JFrame {
         startTime = System.nanoTime();
         final JFileChooser fc = new JFileChooser();
 
-        fc.setCurrentDirectory(new File("./"));
+        fc.setCurrentDirectory(new File("/Users/mhjang/Desktop/tagged/"));
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = fc.getSelectedFile();
@@ -1027,6 +1047,8 @@ public class TaggerGUI extends javax.swing.JFrame {
                 mainList.revalidate();
                 mainList.repaint();
                 filenameSaved = file.getName();
+                myCellRenderer.initialize();
+                mySentenceCellRenderer.initialize();
 
             } catch (Exception ex) {
                 Logger.getLogger(TaggerGUI.class.getName()).log(Level.SEVERE, null, ex);
@@ -1039,7 +1061,7 @@ public class TaggerGUI extends javax.swing.JFrame {
         // TODO add your handling code here:
         final JFileChooser fc = new JFileChooser();
         endTime = System.nanoTime();
-        fc.setCurrentDirectory(new File("./"));
+        fc.setCurrentDirectory(new File("/Users/mhjang/Desktop/tagged/slides/"));
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int returnVal = fc.showSaveDialog(this);
         String dir = "";
@@ -1048,6 +1070,7 @@ public class TaggerGUI extends javax.swing.JFrame {
             System.out.println(dir);
         }
         try {
+            if(filenameSaved.contains(".tagged")) filenameSaved = filenameSaved.replace(".tagged", "");
             bw = new BufferedWriter(new FileWriter(new File(dir+"/"+filenameSaved + ".tagged")));
         } catch (IOException e) {
             e.printStackTrace();
@@ -1228,7 +1251,7 @@ public class TaggerGUI extends javax.swing.JFrame {
                     int tokenIdx = findIndexOfNthToken(fullSentence, index);
                     String token = (String) sentenceModel.getElementAt(index);
                     token = token.replace(tag, "");
-                    System.out.println(token);
+       //             System.out.println(token);
                     sentenceModel.setElementAt(token, index);
 
                     lastTaggedTokenIdx = tokenIdx;
